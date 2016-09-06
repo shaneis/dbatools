@@ -99,7 +99,7 @@ Returns an object with server name, IPAddress (just ipv4), port and static ($tru
 		{
 			try
 			{
-				$server = Connect-SqlServer -SqlServer $servername -SqlCredential $Credential
+				$server = Connect-SqlServer -SqlServer "TCP:$servername" -SqlCredential $Credential
 			}
 			catch
 			{
