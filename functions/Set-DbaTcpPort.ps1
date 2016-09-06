@@ -71,6 +71,21 @@ Returns an object with server name, IPAddress (just ipv4), port and static ($tru
 		[switch]$Force
 	)
 	
+	DynamicParam
+	{
+		if ($SqlServer)
+		{
+			if ($SqlServer.GetUpperBound(0) -eq 0)
+			{
+				Get-ParamSqlServerIps -SqlServer $SqlServer[0]
+			}
+			else
+			{
+				Get-ParamSqlServerIps -SqlServer $SqlServer[0] -Empty
+			}
+		}
+	}
+	
 	BEGIN
 	{
 		if ($Force -eq $true) { $ConfirmPreference = "None" }
