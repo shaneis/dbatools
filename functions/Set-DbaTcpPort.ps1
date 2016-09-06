@@ -59,20 +59,21 @@ Get-SqlRegisteredServerName -SqlServer sql2014 | Set-DbaTcpPort -NoIpV6 -Detaile
 Returns an object with server name, IPAddress (just ipv4), port and static ($true/$false) for every server listed in the Central Management Server on sql2014
 	
 #>
-	[CmdletBinding()]
+	[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "High")]
 	Param (
 		[parameter(Mandatory = $true, ValueFromPipeline = $true)]
 		[Alias("ServerInstance", "SqlInstance")]
 		[string[]]$SqlServer,
 		[Alias("SqlCredential")]
 		[PsCredential]$Credential,
-		[switch]$Detailed,
-		[Alias("Ipv4")]
-		[switch]$NoIpv6
+		[switch]$Dynamic,
+		[switch]$AllIps,
+		[switch]$Force
 	)
 	
 	BEGIN
 	{
+		if ($Force -eq $true) { $ConfirmPreference = "None" }
 		$collection = New-Object System.Collections.ArrayList
 	}
 	
