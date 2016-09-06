@@ -1632,3 +1632,50 @@ Function Get-ParamSqlDatabaseFileTypes
 
 	return $newparams
 }
+
+
+Function Get-ParamSqlServerIps
+{
+	[CmdletBinding()]
+	param (
+		[Parameter(Mandatory = $true)]
+		[Alias("ServerInstance", "SqlInstance")]
+		[object]$SqlServer,
+		[System.Management.Automation.PSCredential]$SqlCredential,
+		[switch]$Empty
+		
+	)
+	
+	if ($Empty -eq $False)
+	{
+		try
+		{
+			$scriptblock = {
+				$tcp = $wmi.ServerInstances.ServerProtocols | Where-Object { $_.DisplayName -eq "TCP/IP" }
+				$tcp.IPAddresses.Ipaddress
+			}
+			
+			$iplist = (Invoke-ManagedComputerCommand -ComputerName $SqlServer -ScriptBlock $scriptblock).IPAddressToString
+		}
+		catch
+		{
+			# It happens, just return a thing without parameter validation
+		}
+	}
+
+	# Reusable parameter setup
+	$newparams = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
+	$attributes = New-Object System.Management.Automation.ParameterAttribute
+	$attributes.ParameterSetName = "__AllParameterSets"
+		
+	# Database list parameter setup
+	if ($iplist) { $validationset = New-Object System.Management.Automation.ValidateSetAttribute -ArgumentList $iplist }
+	$attributeCollection = New-Object -Type System.Collections.ObjectModel.Collection[System.Attribute]
+	$attributeCollection.Add($attributes)
+	if ($iplist) { $attributeCollection.Add($validationset) }
+	$IpAddresses = New-Object -Type System.Management.Automation.RuntimeDefinedParameter("IpAddresses", [String[]], $attributeCollection)
+	
+	$newparams.Add("IpAddresses", $IpAddresses)
+	
+	return $newparams
+}
