@@ -318,7 +318,7 @@ Usefull if you want to run it manually (for example, because database is big and
             )
             if ($PSCmdlet.ShouldProcess($database, "Modifying file '$LogicalFileName' location to '$PhysicalFileLocation'"))
             {
-                Write-Output "Modifying file path to new location"
+                Write-Output "Modifying file of '$LogicalFileName' to: '$PhysicalFileLocation'"
                 try
                 {
                     $server.ConnectionContext.ExecuteNonQuery("ALTER DATABASE [$database] MODIFY FILE (NAME = $LogicalFileName, FILENAME = '$PhysicalFileLocation');") | Out-Null
@@ -452,7 +452,6 @@ Usefull if you want to run it manually (for example, because database is big and
                 {
                     try
                     {
-                        #TODO: ONLY REMOVE FILES AFTER BRINGONLINE & DBCC CHECKDB??
                         #Delete old file already copied to the new path
                         Write-Output "Deleting file '$SourceFilePath'"
                         
@@ -636,14 +635,16 @@ Usefull if you want to run it manually (for example, because database is big and
                     #1st Get all drives/luns from files to move
                     foreach ($DBFile in $FilesToMove)
                     {
-                        #Verfiy path using Split-Path on $logfile.FileName in backwards. This way we will catch the LUNs. Example: "K:\Log01" as LUN name
-                        $DrivePath = Split-Path $DBFile.FileName -parent
+                        Write-Verbose "Filename: $($DBFile.LocalDestinationFolderPath)"
+
+                        #Verfiy path using Split-Path on $DBFile.LocalDestinationFolderPath in backwards. This way we will catch the LUNs. Example: "K:\Log01" as LUN name
+                        $DrivePath = Split-Path $DBFile.LocalDestinationFolderPath -parent
+
                         Do  
                         {
-                            if ($AllDrivesFreeDiskSpace | Where-Object {$DrivePath -eq "$($_.Name)"})
+                            if ($AllDrivesFreeDiskSpace | Where-Object {$DrivePath -eq "$($_.Name.TrimEnd("\"))"})
                             {
-                                #$TotalTLogFreeDiskSpaceKB = ($AllDrivesFreeDiskSpace | Where-Object {$DrivePath -eq $_.Name}).SizeInKB
-                                $DBFile.Drive = $DrivePath
+                                $DBFile.Drive = if ($DrivePath.EndsWith("\")) {$DrivePath} else {"$DrivePath\"}
                                 $match = $true
                                 break
                             }
@@ -666,13 +667,13 @@ Usefull if you want to run it manually (for example, because database is big and
                     #3rd compare with $InstanceSpace luns free space
                     foreach ($Drive in $TotalSpaceNeeded)
                     {
-                        [long]$FreeDiskSpace = ($AllDrivesFreeDiskSpace | Where-Object {$Drive.Name -eq $_.Name}).FreeInKB.ToString().Replace(".", "")
+                        [long]$FreeDiskSpace = ($AllDrivesFreeDiskSpace | Where-Object {$Drive.Name -eq $_.Name}).FreeInKB.ToString().TrimEnd(",00").Replace(".","")
                         $FreeDiskSpaceMB = [math]::Round($($FreeDiskSpace / 1024), 2)
                         $TotalSpaceNeededMB = [math]::Round($($Drive.TotalSpaceNeeded / 1024), 2)
 
                         if ($Drive.TotalSpaceNeeded -le $FreeDiskSpace)
                         {
-                            Write-Output "Drive '$($Drive.Name)' has sufficient free space ($FreeDiskSpaceMB MB) for all files to be copied (Space needed: $($Drive.TotalSpaceNeeded / 1024) MB)'"
+                            Write-Output "Drive '$($Drive.Name)' has sufficient free space ($FreeDiskSpaceMB MB) for all files to be copied (Space needed: $TotalSpaceNeededMB MB)'"
                         }
                         else
                         {
@@ -776,7 +777,20 @@ Usefull if you want to run it manually (for example, because database is big and
         {
             if (($InputFile.Length -gt 0) -and (Test-Path -Path $InputFile))
             {
-                $FilesToMove = Import-Csv -LiteralPath $InputFile
+                Write-Verbose "Trying to Import-CSV using ',' delimiter"
+                $FilesToMove = Import-Csv -LiteralPath $InputFile -Delimiter ","
+                
+                if ($(($FilesToMove | Get-Member -Type NoteProperty).count) -lt 7)
+                {
+                    Write-Verbose "Trying to Import-CSV using ';' delimiter"
+                    $FilesToMove = Import-Csv -LiteralPath $InputFile -Delimiter ";"
+
+                    if ($(($FilesToMove | Get-Member -Type NoteProperty).count) -lt 7)
+                    {
+                        Throw "File has been changed. You must have 7 columns on your file"
+                    }
+                }
+    
             }
             else
             {
@@ -956,8 +970,8 @@ Usefull if you want to run it manually (for example, because database is big and
 
             $file.FileToCopy = $fileToCopy
            
-            Write-Host "DestinationFolderPath: $($file.DestinationFolderPath)"
-            Write-Host "DestinationFolderPath: $fileToCopy"
+            #Write-Host "DestinationFolderPath: $($file.DestinationFolderPath)"
+            #Write-Host "DestinationFolderPath: $fileToCopy"
 
             $file.LocalDestinationFilePath = [System.IO.Path]::Combine($file.DestinationFolderPath,$fileToCopy)
 
@@ -990,7 +1004,6 @@ Usefull if you want to run it manually (for example, because database is big and
                 }
                                 
                 $file.DestinationFolderPath = $ManageUNCPath
-                #TODO
 
             }
             else
@@ -1008,10 +1021,6 @@ Usefull if you want to run it manually (for example, because database is big and
 
         #Get number of files to move
         $FilesCount = @($FilesToMove).Count
-
-        #TODO: REMOVE
-        #$copymethod = "Local_Bits1"
-        #$RobocopyExists = $false
 
         if (@("Local_Robocopy","Local_Bits", "UNC_Robocopy", "UNC_Bits") -contains $copymethod)
         {
@@ -1122,7 +1131,7 @@ Usefull if you want to run it manually (for example, because database is big and
 
                             Start-Sleep -Milliseconds 100;
 
-                            Write-Output 'Waiting for file copies to complete...'	
+                            Write-Output "Waiting for file '$FileToCopy' copy to complete..."
                             do
 		                    {
                                 $LogContent = Get-Content -Path $RobocopyLogPath;
@@ -1205,7 +1214,11 @@ Usefull if you want to run it manually (for example, because database is big and
                     }
                     else
                     {
-                        Write-Warning "The switch -CheckFileHash was not specified."
+                        if ($filesProgressbar -le 1)
+                        {
+                            #Only show this message once
+                            Write-Warning "The switch -CheckFileHash was not specified."
+                        }
                     }
 
                     Write-Verbose "Change file path for logical file '$LogicalName' to '$DestinationFilePath'"
