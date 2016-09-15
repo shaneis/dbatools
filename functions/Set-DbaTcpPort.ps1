@@ -66,8 +66,10 @@ Returns an object with server name, IPAddress (just ipv4), port and static ($tru
 		[string[]]$SqlServer,
 		[Alias("SqlCredential")]
 		[PsCredential]$Credential,
+		[ValidateRange(1, 65535)]
+		[int]$Port,
 		[switch]$Dynamic,
-		[switch]$AllIps,
+		[switch]$IpAll,
 		[switch]$Force
 	)
 	
@@ -90,6 +92,23 @@ Returns an object with server name, IPAddress (just ipv4), port and static ($tru
 	{
 		if ($Force -eq $true) { $ConfirmPreference = "None" }
 		$collection = New-Object System.Collections.ArrayList
+		
+		$ipaddresses = $PSBoundParameters.IPAddresses
+		
+		if ($IpAll -eq $true)
+		{
+			$ipaddresses = '0.0.0.0'
+		}
+		
+		if ($Port -eq 0 -and $Dynamic -eq $false)
+		{
+			throw "Please specify a specific port using -Port or a dynamic port using -Dynamic"
+		}
+		
+		if ($ipaddresses.Length -eq 0)
+		{
+			throw "Please specify -IpAddresses or -IpAll"	
+		}
 	}
 	
 	PROCESS
@@ -137,96 +156,76 @@ Returns an object with server name, IPAddress (just ipv4), port and static ($tru
 					$instancename = 'MSSQLSERVER'
 				}
 				
-				try
+				if ($Dynamic)
 				{
-					Add-Type -Assembly Microsoft.VisualBasic
-					$allips = @()
-					$wmi = New-Object Microsoft.SqlServer.Management.Smo.Wmi.ManagedComputer $server.ComputerNamePhysicalNetBIOS
-					$instance = $wmi.ServerInstances | Where-Object { $_.Name -eq $instancename }
-					$tcp = $instance.ServerProtocols | Where-Object { $_.DisplayName -eq "TCP/IP" }
-					$ips = $tcp.IPAddresses
-					
-					foreach ($ip in $ips)
-					{
-						$props = $ip.IPAddressProperties | Where-Object { $_.Name -eq "TcpPort" -or $_.Name -eq "TcpDynamicPorts" }
+					$scriptblock = {
+						$servername = $args[0]
+						$instancename = $args[1]
+						$ipaddresses = $args[2]
+						$port = $args[3]
+						$dynamic = $args[4]
 						
-						foreach ($prop in $props)
+						$wmi = New-Object Microsoft.SqlServer.Management.Smo.Wmi.ManagedComputer $env:COMPUTERNAME
+						$instance = $wmi.ServerInstances | Where-Object { $_.Name -eq $instancename }
+						$tcp = $instance.ServerProtocols | Where-Object { $_.DisplayName -eq "TCP/IP" }
+						$ips = $tcp.IPAddresses
+						
+						$ipaddress.IPAddressProperties[1].Value = "1433"
+						$tcp.Alter()
+						
+					}
+				}
+				
+				if ($something)
+				{
+					$scriptblock = {
+						$servername = $args[0]
+						$instancename = $args[1]
+						$allips = @()
+						Add-Type -Assembly Microsoft.VisualBasic
+						$wmi = New-Object Microsoft.SqlServer.Management.Smo.Wmi.ManagedComputer $env:COMPUTERNAME
+						$instance = $wmi.ServerInstances | Where-Object { $_.Name -eq $instancename }
+						$tcp = $instance.ServerProtocols | Where-Object { $_.DisplayName -eq "TCP/IP" }
+						$ips = $tcp.IPAddresses
+						
+						foreach ($ip in $ips)
 						{
-							if ([Microsoft.VisualBasic.Information]::IsNumeric($prop.value))
+							$props = $ip.IPAddressProperties | Where-Object { $_.Name -eq "TcpPort" -or $_.Name -eq "TcpDynamicPorts" }
+							
+							foreach ($prop in $props)
 							{
-								$port = $prop.value
-								if ($prop.name -eq 'TcpPort')
+								if ([Microsoft.VisualBasic.Information]::IsNumeric($prop.value))
 								{
-									$static = $true
+									$port = $prop.value
+									if ($prop.name -eq 'TcpPort')
+									{
+										$static = $true
+									}
+									else
+									{
+										$static = $false
+									}
+									break
 								}
-								else
-								{
-									$static = $false
-								}
-								break
+							}
+							
+							$allips += [PsCustomObject]@{
+								Server = $servername
+								IPAddress = $ip.Ipaddress.IPAddressToString
+								Port = $port
+								Static = $static
 							}
 						}
-						
-						$allips += [PsCustomObject]@{
-							Server = $servername
-							IPAddress = $ip.Ipaddress.IPAddressToString
-							Port = $port
-							Static = $static
-						}
+						return $allips
 					}
+				}
+				try
+				{
+					$setip = Invoke-ManagedComputerCommand -ComputerName $server.ComputerNamePhysicalNetBIOS -ArgumentList $servername, $instancename -ScriptBlock $scriptblock
 				}
 				catch
 				{
-					Write-Verbose "Local access didn't work for $servername. Trying Remoting."
-					
-					try
-					{
-						$allips = Invoke-Command -ComputerName $server.ComputerNamePhysicalNetBIOS -ArgumentList $servername, $instancename -ScriptBlock {
-							$servername = $args[0]
-							$instancename = $args[1]
-							$allips = @()
-							Add-Type -Assembly Microsoft.VisualBasic
-							$null = [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SqlWmiManagement")
-							$wmi = New-Object Microsoft.SqlServer.Management.Smo.Wmi.ManagedComputer $env:COMPUTERNAME
-							$instance = $wmi.ServerInstances | Where-Object { $_.Name -eq $instancename }
-							$tcp = $instance.ServerProtocols | Where-Object { $_.DisplayName -eq "TCP/IP" }
-							$ips = $tcp.IPAddresses
-							
-							foreach ($ip in $ips)
-							{
-								$props = $ip.IPAddressProperties | Where-Object { $_.Name -eq "TcpPort" -or $_.Name -eq "TcpDynamicPorts" }
-								
-								foreach ($prop in $props)
-								{
-									if ([Microsoft.VisualBasic.Information]::IsNumeric($prop.value))
-									{
-										$port = $prop.value
-										if ($prop.name -eq 'TcpPort')
-										{
-											$static = $true
-										}
-										else
-										{
-											$static = $false
-										}
-										break
-									}
-								}
-								
-								$allips += [PsCustomObject]@{
-									Server = $servername
-									IPAddress = $ip.Ipaddress.IPAddressToString
-									Port = $port
-									Static = $static
-								}
-							}
-							return $allips
-						}
-					}
-					catch
-					{
-						Write-Warning "Could not get detailed information for $servername"
-					}
+					Write-Warning "Could not get detailed information for $servername"
 				}
 				
 				$cleanedup = $allips | Sort-Object IPAddress | Select-Object Server, IPAddress, Port, Static
