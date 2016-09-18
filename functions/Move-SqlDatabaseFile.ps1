@@ -8,15 +8,14 @@ Is usefull when a new drive/lun is delivered or when we need to move files to an
 .DESCRIPTION
 This function will perform the following steps:
     1. Set database offline
-    2. Copy file(s) from source to destination
+    2. Copy file(s) from source to selected destination
     3. Alter database files location on database metadata (using ALTER DATABASE [db] MODIFY FILE command)
     4. Bring database Online
-    5. Perform DBCC CHECKDB - You can skip this step if you want to execute it manually after check that database is online.
+    5. Perform DBCC CHECKDB - You can skip this step if you want to execute it manually after check that database is online. (this step could take a while depending on database size.
 
 By default the source files would not be deleted. But if you want, you can use -DeleteSourceFiles switch.
 
-
-Copy method:
+Which copy method will be used?:
     If running localy
         - Use Robocopy. If not exits use Start-BitsTransfer
 
@@ -110,6 +109,11 @@ Move-SqlDatabaseFile -SqlServer sqlserver2014a -Databases db1 -ExportDatabaseStr
 
 Will generate a files.csv files to C:\temp folder with the list of all files within database 'db1'.
 This file will have an empty column called 'DestinationFolderPath' that should be filled by user and run the command again passing this file. 
+
+.EXAMPLE 
+Move-SqlDatabaseFile -SqlServer sqlserver2014a -Databases db1 -MoveFromCSV -InputFile "C:\temp\files.csv"
+
+Will move all files within 'files.csv'. Will use "DestinationFolderPath" column as file destination.
 
 .EXAMPLE 
 Move-SqlDatabaseFile -SqlServer sqlserver2014a -Databases db1 -FileType DATA
@@ -214,8 +218,6 @@ Usefull if you want to run it manually (for example, because database is big and
         {
             if ($PSCmdlet.ShouldProcess($database, "Set database offline"))
             {
-                Write-Output "Set database '$database' Offline!"
-
                 $server.ConnectionContext.ExecuteNonQuery("ALTER DATABASE [$database] SET OFFLINE WITH ROLLBACK IMMEDIATE") | Out-Null
 
                 do
@@ -235,7 +237,7 @@ Usefull if you want to run it manually (for example, because database is big and
                 }
                 else
                 {
-                    Write-Output "Database set OFFLINE successfull! Actual state: '$($server.Databases[$database].Status.ToString())'"
+                    Write-Verbose "Database set OFFLINE successfull! Actual state: '$($server.Databases[$database].Status.ToString())'"
                 }
             }
         }
@@ -244,10 +246,8 @@ Usefull if you want to run it manually (for example, because database is big and
         {
             if ($PSCmdlet.ShouldProcess($database, "Set database online"))
             {
-                Write-Output "Set database '$database' Online!"
                 try
                 {
-                
                         $server.ConnectionContext.ExecuteNonQuery("ALTER DATABASE [$database] SET ONLINE") | Out-Null
 
                 }
@@ -263,8 +263,7 @@ Usefull if you want to run it manually (for example, because database is big and
                     $server.Databases[$database].Refresh()
                     Start-Sleep -Seconds 1
                     $WaitingTime += 1
-                    Write-Output "Database status: $($server.Databases[$database].Status.ToString())"
-                    Write-Output "WaitingTime: $WaitingTime"
+                    Write-Verbose "Total waiting time: $WaitingTime. Database status: $($server.Databases[$database].Status.ToString())"
                 }
                 while (($server.Databases[$database].Status.ToString().Contains("Normal") -eq $false) -and $WaitingTime -le 10)
             }
@@ -276,11 +275,11 @@ Usefull if you want to run it manually (for example, because database is big and
             {
                 $server.Databases[$database].Status.ToString()
             }
-            Write-Output "Database '$database' in Online!"
+            Write-Verbose "Database '$database' in Online!"
 
             if ($NoDbccCheckDb -eq $false)
             {
-                Write-Output "Starting Dbcc CHECKDB for $dbname on $source"
+                Write-Verbose "Starting Dbcc CHECKDB for $dbname on $source"
 			    $dbccgood = Start-DbccCheck -Server $server -DBName $dbname
 					
 			    if ($dbccgood -eq $false)
@@ -318,7 +317,6 @@ Usefull if you want to run it manually (for example, because database is big and
             )
             if ($PSCmdlet.ShouldProcess($database, "Modifying file '$LogicalFileName' location to '$PhysicalFileLocation'"))
             {
-                Write-Output "Modifying file of '$LogicalFileName' to: '$PhysicalFileLocation'"
                 try
                 {
                     $server.ConnectionContext.ExecuteNonQuery("ALTER DATABASE [$database] MODIFY FILE (NAME = $LogicalFileName, FILENAME = '$PhysicalFileLocation');") | Out-Null
@@ -344,8 +342,6 @@ Usefull if you want to run it manually (for example, because database is big and
                 [parameter(Mandatory = $true)]
 		        [string]$DestinationFilePath
             )
-            
-            Write-Output "Comparing file hash".
             
             $SourceHash = Get-FileHash -FilePath $SourceFilePath
             $DestinationHash = Get-FileHash -FilePath $DestinationFilePath
@@ -452,6 +448,7 @@ Usefull if you want to run it manually (for example, because database is big and
                 {
                     try
                     {
+                        #TODO: ONLY REMOVE FILES AFTER BRINGONLINE & DBCC CHECKDB??
                         #Delete old file already copied to the new path
                         Write-Output "Deleting file '$SourceFilePath'"
                         
@@ -629,7 +626,7 @@ Usefull if you want to run it manually (for example, because database is big and
             {
                 if ($PSCmdlet.ShouldProcess($sourcenetbios, "Getting drives free space using Get-DbaDiskSpace command"))
                 {
-                    Write-Output "Getting drives free space using Get-DbaDiskSpace command."
+                    Write-Verbose "Getting drives free space using Get-DbaDiskSpace command."
                     [object]$AllDrivesFreeDiskSpace = Get-DbaDiskSpace -ComputerName $sourcenetbios -Unit KB | Select-Object Name, FreeInKB
 
                     #1st Get all drives/luns from files to move
@@ -680,8 +677,6 @@ Usefull if you want to run it manually (for example, because database is big and
                             throw "Drive '$($Drive.Name)' does not have sufficient space available. Needed: '$TotalSpaceNeededMB MB'. Existing: $FreeDiskSpaceMB MB. Quitting"
                         }
                     }
-
-                    Write-Output "Space requirements checked!"
                 }
             }
             catch
@@ -733,6 +728,7 @@ Usefull if you want to run it manually (for example, because database is big and
 
         Write-Output "Resolving NetBIOS name"
         $sourcenetbios = Resolve-NetBiosName $server
+        $sourcenetbios += ".ge.ptlocal"
         Write-Output "SourceNetBios: $sourcenetbios"
 	
 		foreach ($database in $Databases)
@@ -1004,6 +1000,7 @@ Usefull if you want to run it manually (for example, because database is big and
                 }
                                 
                 $file.DestinationFolderPath = $ManageUNCPath
+                #TODO
 
             }
             else
@@ -1015,12 +1012,21 @@ Usefull if you want to run it manually (for example, because database is big and
             }
         }
 
+        Write-Output "We will check access to the specified paths."
         Test-PathsAccess -PathsToUse $FilesToMove
+        Write-Output "Access to file paths finished."
 
+        Write-Output "We will check space requirements"
         Check-SpaceRequirements
+        Write-Output "Space requirements checked!"
+
 
         #Get number of files to move
         $FilesCount = @($FilesToMove).Count
+
+        #TODO: REMOVE
+        #$copymethod = "Local_Bits1"
+        #$RobocopyExists = $false
 
         if (@("Local_Robocopy","Local_Bits", "UNC_Robocopy", "UNC_Bits") -contains $copymethod)
         {
@@ -1052,8 +1058,9 @@ Usefull if you want to run it manually (for example, because database is big and
 
             $filesProgressbar = 0
 
-            #Call function to set database offline
+            Write-Output "We will set database '$database' Offline!"
             Set-SqlDatabaseOffline
+            Write-Verbose "Database '$database' was set OFFLINE with success!"
         
             foreach ($file in $FilesToMove)
             {
@@ -1200,6 +1207,7 @@ Usefull if you want to run it manually (for example, because database is big and
                     
                     if ($CheckFileHash)
                     {
+                        Write-Output "Comparing file hash. This could take a while please wait.".
                         if (Compare-FileHashes -SourceFilePath $SourceFilePath -DestinationFilePath $DestinationFilePath)
                         {
                             Write-Output "File copy OK! Hash is the same for both files."
@@ -1221,9 +1229,9 @@ Usefull if you want to run it manually (for example, because database is big and
                         }
                     }
 
-                    Write-Verbose "Change file path for logical file '$LogicalName' to '$DestinationFilePath'"
+                    Write-Output "Change file path for logical file '$LogicalName' to '$DestinationFilePath'"
                     Set-SqlDatabaseFileLocation -Database $dbName -LogicalFileName $LogicalName -PhysicalFileLocation $LocalDestinationFilePath
-                    Write-Verbose "File path changed"
+                    Write-Output "File path changed with success."
                 }
                 catch
                 {
@@ -1370,12 +1378,12 @@ Usefull if you want to run it manually (for example, because database is big and
             }
         }
 
-        Write-Verbose "Copy done! Lets bring database Online!"
+        Write-Output "Copy done! Lets bring database '$database' Online!"
         $resultDBOnline = Set-SqlDatabaseOnline
         
         if ($resultDBOnline)
         {
-            Write-Verbose "Database online!"
+            Write-Output "Database '$database' online!"
         }
         else
         {
