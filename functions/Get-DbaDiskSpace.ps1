@@ -140,9 +140,18 @@ Returns a custom object filled with information for server1, server2 and server3
 				
 				if (!$diskname.StartsWith("\\"))
 				{
-					$total = "{0:n2}" -f ($disk.Capacity/$measure)
-					$free = "{0:n2}" -f ($disk.Freespace/$measure)
-					$percentfree = "{0:n2}" -f (($disk.Freespace / $disk.Capacity) * 100)
+					$total = ($disk.Capacity/$measure)
+					$free = ($disk.Freespace/$measure)
+
+                    if ([string]::IsNullOrEmpty($($disk.Capacity)))
+                    {
+                        $diskCapacity = 1
+                    }
+                    else
+                    {
+                        $diskCapacity = $disk.Capacity
+                    }
+					$percentfree = "{0:n2}" -f (($disk.Freespace / $diskCapacity) * 100)
 					
 					if ($CheckForSql -eq $true)
 					{

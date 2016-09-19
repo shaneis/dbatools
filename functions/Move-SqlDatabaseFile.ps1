@@ -664,7 +664,7 @@ Usefull if you want to run it manually (for example, because database is big and
                     #3rd compare with $InstanceSpace luns free space
                     foreach ($Drive in $TotalSpaceNeeded)
                     {
-                        [long]$FreeDiskSpace = ($AllDrivesFreeDiskSpace | Where-Object {$Drive.Name -eq $_.Name}).FreeInKB.ToString().TrimEnd(",00").Replace(".","")
+                        [long]$FreeDiskSpace = ($AllDrivesFreeDiskSpace | Where-Object {$Drive.Name -eq $_.Name}).FreeInKB
                         $FreeDiskSpaceMB = [math]::Round($($FreeDiskSpace / 1024), 2)
                         $TotalSpaceNeededMB = [math]::Round($($Drive.TotalSpaceNeeded / 1024), 2)
 
@@ -728,7 +728,6 @@ Usefull if you want to run it manually (for example, because database is big and
 
         Write-Output "Resolving NetBIOS name"
         $sourcenetbios = Resolve-NetBiosName $server
-        $sourcenetbios += ".ge.ptlocal"
         Write-Output "SourceNetBios: $sourcenetbios"
 	
 		foreach ($database in $Databases)
