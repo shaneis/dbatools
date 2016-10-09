@@ -279,7 +279,7 @@ If there is a DBCC Error it will continue to perform rest of the actions and wil
 				
 				        if ($result -eq 1) 
                         { 
-                            Throw "Abandoned as cannot chekc Agent Service - Please check permissions and connectivity"
+                            Throw "Abandoned as cannot check Agent Service - Please check permissions and connectivity"
                         }
                         else
                         {
