@@ -2,6 +2,8 @@
 # needs proper help and proper parameters
 # needs try catch
 # needs shouldprocess added
+# Ready for more comments and suggestions
+# Need to validate for monthyear or year but not have both?
 
 function Get-DBABackupThroughPut
 {
@@ -15,22 +17,25 @@ param (
 # Load SMO extension
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.Smo") | Out-Null;
 $all = $true
+## Probably should take an array of servers?
 $srv = New-Object Microsoft.SqlServer.Management.Smo.Server $Server
 $Results = @()
 foreach($db in $srv.Databases)
 {
-$Results +=  $db.EnumBackupSets()|Where-Object{$_.BackupSetType -ne 3 -and (($_.BackupFinishDate - $_.BackupStartDate).totalseconds -gt 1)} |Select DatabaseName,Name,BackupStartDate,BackupFinishDate,BackupSize,CompressedBackupSize,BackupSetType 
+# filters for Fulland Diff Backups
+$Results +=  $db.EnumBackupSets()|Where-Object{$_.BackupSetType -ne 3 -and (($_.BackupFinishDate - $_.BackupStartDate).totalseconds -gt 1)} |Select DatabaseName,Name,BackupStartDate,BackupFinishDate,BackupSize,BackupSetType 
 }
+# Backp Throughput calc from Brent Ozar blog 
 $TPexp = @{Name='ThroughPut';Expression = {($_.BackupSize/($_.BackupFinishDate - $_.BackupStartDate).totalseconds)/1048576 }}
 if($database)
 {
 $All = $false
-$a = $Results|Where-Object {$_.DatabaseName -eq $database} | Select $TPexp, DatabaseName,Name,BackupStartDate,BackupFinishDate,BackupSize,CompressedBackupSize,BackupSetType 
+$a = $Results|Where-Object {$_.DatabaseName -eq $database} | Select $TPexp, DatabaseName,Name,BackupStartDate,BackupFinishDate,BackupSize,BackupSetType 
 $database =$a[0].DatabaseName
 }
 if($all)
 {
-$a = $Results | Select $TPexp, DatabaseName,Name,BackupStartDate,BackupFinishDate,BackupSize,CompressedBackupSize,BackupSetType 
+$a = $Results | Select $TPexp, DatabaseName,Name,BackupStartDate,BackupFinishDate,BackupSize,BackupSetType 
 $database = 'All'
 }
 if($MonthYear)
