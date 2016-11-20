@@ -433,16 +433,12 @@ Limitations: Does not support Application Roles yet
 		
 		Copy-Login -sourceserver $sourceserver -destserver $destserver -Logins $Logins -Exclude $Exclude -Force $force
 		
-		$sa = $sourceserver.Logins | Where-Object { $_.id -eq 1 }
-		$destsa = $destserver.Logins | Where-Object { $_.id -eq 1 }
-		$saname = $sa.name
-		
-		if ($saname -ne $destsa.name -and $SyncSaName -eq $true)
+		if ($sourcesa -ne $destsa.name -and $SyncSaName -eq $true)
 		{
-			Write-Output "Changing sa username to match source ($saname)"
-			If ($Pscmdlet.ShouldProcess($destination, "Changing sa username to match source ($saname)"))
+			Write-Output "Changing sa username to match source ($sourcesa)"
+			If ($Pscmdlet.ShouldProcess($destination, "Changing sa username to match source ($sourcesa)"))
 			{
-				$destsa.Rename($saname)
+				$destsa.Rename($sourcesa)
 				$destsa.alter()
 			}
 		}
