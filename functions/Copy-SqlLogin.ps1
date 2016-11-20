@@ -123,14 +123,17 @@ Limitations: Does not support Application Roles yet
 		
 		Function Copy-Login 
 		{
-			
+			$destsa = Get-SaLoginName $destserver $DestinationSqlCredential
+			$sourcesa = Get-SaLoginName $sourceserver $SourceSqlCredential
+				
 			foreach ($sourcelogin in $sourceserver.logins)
 			{
 				
 				$username = $sourcelogin.name
+				
 				if ($Logins -ne $null -and $Logins -notcontains $username) { continue }
 				if ($sourcelogin.id -eq 1) { continue }
-				if ($Exclude -contains $username -or $username.StartsWith("##") -or $username -eq 'sa') { Write-Output "Skipping $username"; continue }
+				if ($Exclude -contains $username -or $username.StartsWith("##") -or $username -eq $sourcesa) { Write-Output "Skipping $username"; continue }
 				$servername = Resolve-NetBiosName $sourceserver
 				
 				$currentlogin = $sourceserver.ConnectionContext.truelogin
@@ -180,11 +183,11 @@ Limitations: Does not support Application Roles yet
 						{
 							
 							$owneddbs = $destserver.Databases | Where { $_.Owner -eq $username }
-							$sa = Get-SaLoginName $destserver $DestinationSqlCredential
+							
 							foreach ($owneddb in $owneddbs)
 							{
-								Write-Output "Changing database owner for $($owneddb.name) from $username to $sa"
-								$owneddb.SetOwner($sa)
+								Write-Output "Changing database owner for $($owneddb.name) from $username to $destsa"
+								$owneddb.SetOwner($destsa)
 								$owneddb.Alter()
 							}
 							
@@ -192,12 +195,12 @@ Limitations: Does not support Application Roles yet
 							
 							foreach ($ownedjob in $ownedjobs)
 							{
-								Write-Output "Changing job owner for $($ownedjob.name) from $username to $sa"
-								$ownedjob.set_OwnerLoginName($sa)
+								Write-Output "Changing job owner for $($ownedjob.name) from $username to $destsa"
+								$ownedjob.set_OwnerLoginName($destsa)
 								$ownedjob.Alter()
 							}
 
-							$schemas = $db.schemas | ? {$_.owner -in $users.name };
+							$schemas = $db.schemas | ? {$_.owner -in $users.name }
 							if ($schemas.count -gt 0)
 							{
 								foreach ($sm in $schemas) 
