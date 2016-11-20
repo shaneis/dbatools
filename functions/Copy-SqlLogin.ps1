@@ -121,8 +121,9 @@ Limitations: Does not support Application Roles yet
 	BEGIN
 	{
 		
-		Function Copy-Login
+		Function Copy-Login 
 		{
+			
 			foreach ($sourcelogin in $sourceserver.logins)
 			{
 				
@@ -179,11 +180,11 @@ Limitations: Does not support Application Roles yet
 						{
 							
 							$owneddbs = $destserver.Databases | Where { $_.Owner -eq $username }
-							
+							$sa = Get-SaLoginName $destserver $DestinationSqlCredential
 							foreach ($owneddb in $owneddbs)
 							{
-								Write-Output "Changing database owner for $($owneddb.name) from $username to sa"
-								$owneddb.SetOwner('sa')
+								Write-Output "Changing database owner for $($owneddb.name) from $username to $sa"
+								$owneddb.SetOwner($sa)
 								$owneddb.Alter()
 							}
 							
@@ -191,11 +192,21 @@ Limitations: Does not support Application Roles yet
 							
 							foreach ($ownedjob in $ownedjobs)
 							{
-								Write-Output "Changing job owner for $($ownedjob.name) from $username to sa"
-								$ownedjob.set_OwnerLoginName('sa')
+								Write-Output "Changing job owner for $($ownedjob.name) from $username to $sa"
+								$ownedjob.set_OwnerLoginName($sa)
 								$ownedjob.Alter()
 							}
-							
+
+							$schemas = $db.schemas | ? {$_.owner -in $users.name };
+							if ($schemas.count -gt 0)
+							{
+								foreach ($sm in $schemas) 
+								{
+									$sm.Owner = "dbo"
+									$sm.Alter()
+								}
+							}
+														
 							$login.Disable()
 							$destserver.EnumProcesses() | Where-Object { $_.Login -eq $username } | ForEach-Object { $destserver.KillProcess($_.spid) }
 							$login.Drop()
