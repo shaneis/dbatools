@@ -168,7 +168,12 @@ It also includes the support databases (ReportServer, ReportServerTempDb, distri
 	
 	BEGIN
 	{
-		
+		Function Test-HostOSLinux
+		{
+			param([object]$smoserver)
+			$smoserver.ConnectionContext.ExecuteScalar("SELECT @@VERSION") -match "Linux"
+		}
+				
 		# Global Database Function
 		Function Get-SqlFileStructure
 		{
@@ -680,6 +685,16 @@ It also includes the support databases (ReportServer, ReportServerTempDb, distri
 		
 		$source = $sourceserver.DomainInstanceName
 		$destination = $destserver.DomainInstanceName
+		
+		if (Test-HostOSLinux $sourceserver) { throw "Linux as a source server is not supported yet" }
+		
+		if ($linuxdestination = Test-HostOSLinux $destserver)
+		{
+			$linuxlogin = Get-Credential -Message "Backup files must be copied to the destination SQL Server.   Please enter a valid remote login for $destination and ensure SSH is enabled."
+			$pscp = "$(Split-Path $PSScriptRoot -Parent)\bin\pscp.exe"
+		}
+	
+		return
 		
 		if ($NetworkShare.Length -gt 0)
 		{
