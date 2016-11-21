@@ -104,7 +104,7 @@ Finds the orphaned ending with ".fsf" and ".mld" in addition to the default file
 				SET parent = @dir
 				WHERE parent IS NULL;
 "@
-			if ($smoserver.versionMajor -le 8)
+			if ($server.versionMajor -le 8)
 			{
 				# this will not have the ability to peek into filestream stuff because sysaltfiles doesnt use it
 				$query_files_sql = @"	
@@ -169,10 +169,10 @@ Finds the orphaned ending with ".fsf" and ".mld" in addition to the default file
 				# Add support for Full Text Catalogs in Sql Server 2005 and below
 				foreach ($db in $databaselist)
 				{
-					if ($smoserver.Databases[$database].ExecuteWithResults("SELECT FULLTEXTSERVICEPROPERTY('IsFullTextInstalled')").Tables[0][0] -eq 1)
+					if ($server.Databases[$database].ExecuteWithResults("SELECT FULLTEXTSERVICEPROPERTY('IsFullTextInstalled')").Tables[0][0] -eq 1)
 					{
 						Write-Debug "Gathering Full Text Information"
-						$fttable = $smoserver.Databases[$database].ExecuteWithResults('sp_help_fulltext_catalogs')						
+						$fttable = $server.Databases[$database].ExecuteWithResults('sp_help_fulltext_catalogs')						
 						foreach ($ftc in $fttable.Tables[0].rows)
 						{
 							$Paths += $ftc.Path
