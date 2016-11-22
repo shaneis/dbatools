@@ -168,12 +168,6 @@ It also includes the support databases (ReportServer, ReportServerTempDb, distri
 	
 	BEGIN
 	{
-		Function Test-HostOSLinux
-		{
-			param([object]$smoserver)
-			$smoserver.ConnectionContext.ExecuteScalar("SELECT @@VERSION") -match "Linux"
-		}
-				
 		# Global Database Function
 		Function Get-SqlFileStructure
 		{
