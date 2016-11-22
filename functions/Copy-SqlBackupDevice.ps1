@@ -133,9 +133,10 @@ Shows what would happen if the command were executed using force.
 					$sql = $backupdevice.Script() | Out-String
 					$sql = $sql -replace [Regex]::Escape("'$source'"), [Regex]::Escape("'$destination'")
 				}
-				catch { 
+				catch
+				{
 					Write-Exception $_
-					continue 
+					continue
 				}
 			}
 			
@@ -152,7 +153,7 @@ Shows what would happen if the command were executed using force.
 			
 			Write-Output "Checking if directory $destpath exists"
 			
-			if ($(Test-SqlPath -SqlServer $Destination -Path $path) -eq $false)
+			if ($(Test-SqlPath -SqlServer $destserver -Path $path) -eq $false)
 			{
 				$backupdirectory = $destserver.BackupDirectory
 				$destpath = Join-AdminUnc $destnetbios $backupdirectory
@@ -169,9 +170,10 @@ Shows what would happen if the command were executed using force.
 						$sql = $sql -replace $path, $backupdirectory
 						$sql = $sql -replace [Regex]::Escape("'$source'"), [Regex]::Escape("'$destination'")
 					}
-					catch { 
+					catch
+					{
 						Write-Exception $_
-						continue 
+						continue
 					}
 				}
 			}
@@ -184,9 +186,10 @@ Shows what would happen if the command were executed using force.
 					$destserver.ConnectionContext.ExecuteNonQuery($sql) | Out-Null
 					$destserver.BackupDevices.Refresh()
 				}
-				catch { 
+				catch
+				{
 					Write-Exception $_
-					continue 
+					continue
 				}
 			}
 			
