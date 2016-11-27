@@ -106,7 +106,10 @@ https://dbatools.io/Export-SqlLogin
 		[switch]$NoClobber,
 		[switch]$Append,
 		[switch]$NoDatabases,
-		[switch]$NoJobs
+		[switch]$NoJobs,
+		[string]$DefaultDb,
+		[string]$DefaultDbIfMissing
+
 	)
 	
 	DynamicParam
@@ -187,9 +190,7 @@ https://dbatools.io/Export-SqlLogin
 					Write-Output "--Exporting $username"
 				}
 				
-				$outsql += "use master"
-				# Getting some attributes
-				$defaultdb = $sourcelogin.DefaultDatabase
+				$outsql += "use master"	
 				$language = $sourcelogin.Language
 				
 				if ($sourcelogin.PasswordPolicyEnforced -eq $false)
@@ -209,7 +210,12 @@ https://dbatools.io/Export-SqlLogin
 				{
 					$checkexpiration = "ON"
 				}
-				
+				# If we dont pass a default db, set it to the source login's default
+				if ($DefaultDb -eq $null)
+				{ 
+					$Defaultdb = $sourcelogin.DefaultDatabase
+				}			
+					
 				# Attempt to script out SQL Login
 				if ($sourcelogin.LoginType -eq "SqlLogin")
 				{
@@ -246,14 +252,55 @@ https://dbatools.io/Export-SqlLogin
 					
 					$sid = "0x"; $sourcelogin.sid | ForEach-Object { $sid += ("{0:X}" -f $_).PadLeft(2, "0") }
 					$outsql += "IF NOT EXISTS (SELECT loginname from master.dbo.syslogins where name = '$username')
-CREATE LOGIN [$username] WITH PASSWORD = $hashedpass HASHED, SID = $sid, DEFAULT_DATABASE = [$defaultdb], CHECK_POLICY = $checkpolicy, CHECK_EXPIRATION = $checkexpiration, DEFAULT_LANGUAGE = [$language]"
+begin
+	declare @dbname sysnam
+		, @defaultdbname sysname
+		, @createstmt nvarchar(max)
+
+		set @dbname = '$Defaultdb'
+		set @defaultdbname = '$DefaultDbIfMissing'
+
+	set @dbname = isnull((
+		select name
+		FROM master.dbo.sysdatabases
+		where name = @dbname
+	), @defaultdbname)
+
+	set @createstmt = '
+	CREATE LOGIN [$username] 
+	WITH PASSWORD = $hashedpass HASHED, 
+	SID = $sid, 
+	DEFAULT_DATABASE = ['+@dbname+'], 
+	CHECK_POLICY = $checkpolicy, 
+	CHECK_EXPIRATION = $checkexpiration, 
+	DEFAULT_LANGUAGE = [$language]
+	'
+	exec (@createstmt)
+end
+"
 				}
 				
 				# Attempt to script out Windows User
 				elseif ($sourcelogin.LoginType -eq "WindowsUser" -or $sourcelogin.LoginType -eq "WindowsGroup")
 				{
 					$outsql += "IF NOT EXISTS (SELECT loginname from master.dbo.syslogins where name = '$username')
-CREATE LOGIN [$username] FROM WINDOWS WITH DEFAULT_DATABASE = [$defaultdb], DEFAULT_LANGUAGE = [$language]"
+begin
+	declare @dbname sysnam
+		, @defaultdbname sysname
+		, @createstmt nvarchar(max)
+
+		set @dbname = '$Defaultdb'
+		set @defaultdbname = '$DefaultDbIfMissing'
+
+	set @dbname = isnull((
+		select name
+		FROM master.dbo.sysdatabases
+		where name = @dbname
+	), @defaultdbname)
+	set @createstmt = 'CREATE LOGIN [$username] FROM WINDOWS WITH DEFAULT_DATABASE = ['+@dbname+'], DEFAULT_LANGUAGE = [$language]'
+	exec (@createstmt)
+end
+"
 				}
 				
 				# This script does not currently support certificate mapped or asymmetric key users.

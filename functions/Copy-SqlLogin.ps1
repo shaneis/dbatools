@@ -122,7 +122,9 @@ Limitations: Does not support Application Roles yet
 		[parameter(ParameterSetName = "Live")]
 		[switch]$Force,
 		[switch]$SyncSaName,
-		[object]$pipelogin
+		[object]$pipelogin,
+		[string]$DefaultDb,
+		[string]$DefaultDbIfMissing
 	)
 	
 	DynamicParam { if ($source) { return Get-ParamSqlLogins -SqlServer $source -SqlCredential $SourceSqlCredential } }
@@ -411,12 +413,16 @@ Limitations: Does not support Application Roles yet
 		
 		if ($SyncOnly)
 		{
+			
 			Sync-SqlLoginPermissions -Source $Source -Destination $Destination $loginparms
 			return
 		}
 		
 		if ($OutFile)
 		{
+			if ($DefaultDbIfMissing -ne $null){
+				Write-Debug "Ignoring DefaultDbIfMissing, exporting logins does not touch the destination server."
+			}
 			Export-SqlLogin -SqlServer $source -FilePath $OutFile $loginparms
 			return
 		}
