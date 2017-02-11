@@ -1,4 +1,4 @@
-Function Connect-SqlServer
+﻿Function Connect-SqlServer
 {
 <# 
 .SYNOPSIS 
@@ -70,6 +70,12 @@ Internal function that creates SMO server object. Input can be text or SMO.Serve
 	
 	$server = New-Object Microsoft.SqlServer.Management.Smo.Server $SqlServer
 	$server.ConnectionContext.ApplicationName = "dbatools PowerShell module - dbatools.io"
+
+    if ($server.Configuration.SmoAndDmoXPsEnabled.RunValue -eq 0)
+    {
+        Write-Error "Accessing this server via SQL Management Objects (SMO) or Distributed Management Objects (DMO) is currently not permitted."
+        break
+    }
 	
 	try
 	{
