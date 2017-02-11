@@ -73,7 +73,9 @@ Internal function that creates SMO server object. Input can be text or SMO.Serve
 
     if ($server.Configuration.SmoAndDmoXPsEnabled.RunValue -eq 0)
     {
-        Write-Error "Accessing this server via SQL Management Objects (SMO) or Distributed Management Objects (DMO) is currently not permitted."
+        Write-Error "Accessing this server via SQL Management Objects (SMO) or Distributed Management Objects (DMO) is currently not permitted.
+                     Please enable the option 'SMO and DMO XPs' on your instance using sp_configure to continue.
+                     Please note that this will require 'Show Advanced Options' to be enabled using sp_configure as well."
         break
     }
 	
